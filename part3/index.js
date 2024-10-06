@@ -79,8 +79,11 @@ app.get("/api/persons/:id", (req, res) => {
 //delete a single contact
 app.delete("/api/persons/:id", (req, res) => {
   const id = req.params.id;
-  persons = persons.filter((person) => person.id != id);
-  res.status(204, id).end();
+  let found = persons.find((person) => person.id == id);
+  if (found) {
+    persons = persons.filter((person) => person.id != id);
+    res.status(204).end();
+  } else res.status(404).end();
 });
 
 //post request
