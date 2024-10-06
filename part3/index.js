@@ -24,22 +24,25 @@ let persons = [
 
 const express = require("express");
 const morgan = require("morgan");
+const cors = require("cors");
 
 const app = express();
-
-const PORT = 3001;
 
 //this middleware is used to parse data sent via request
 //express middlewares are used to handle request response objects and modify them according to our need
 //we can use multiple middlewares at once but they will be executed orderly by which they are placed in the application
 app.use(express.json());
-//our own middleware
-const requestLogger = (request, response, next) => {
-  console.log("Method", request.method);
-  console.log("Path", request.path);
-  console.log("Body", request.body);
-  next();
-};
+
+const validDomain = "http://localhost:5173";
+app.use(cors(validDomain));
+
+// //our own middleware
+// const requestLogger = (request, response, next) => {
+//   console.log("Method", request.method);
+//   console.log("Path", request.path);
+//   console.log("Body", request.body);
+//   next();
+// };
 
 //app.use(requestLogger);
 
@@ -77,15 +80,16 @@ app.get("/api/persons/:id", (req, res) => {
 app.delete("/api/persons/:id", (req, res) => {
   const id = req.params.id;
   persons = persons.filter((person) => person.id != id);
-  res.status(204).end();
+  res.status(204, id).end();
 });
 
 //post request
 app.post("/api/persons", (req, res) => {
   //there is a possibility that ids might overlap but we are not focusing on that
   //right now
-  const id = Math.floor(Math.random() * 1000) + 1;
-  const body = { ...req.body, id };
+  let id = Math.floor(Math.random() * 1000) + 1;
+  id = id.toString();
+  const body = { id, ...req.body };
 
   //we need to check if the name we are getting doesn't already exist in the data we have
   if (body.name != "") {
@@ -101,5 +105,5 @@ app.post("/api/persons", (req, res) => {
     res.status(404).json({ error: "please enter a valid name" });
   }
 });
-
+const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => console.log("Listening"));
