@@ -1,31 +1,7 @@
-//data
-let persons = [
-  {
-    id: "1",
-    name: "Arto Hellas",
-    number: "040-123456",
-  },
-  {
-    id: "2",
-    name: "Ada Lovelace",
-    number: "39-44-5323523",
-  },
-  {
-    id: "3",
-    name: "Dan Abramov",
-    number: "12-43-234345",
-  },
-  {
-    id: "4",
-    name: "Mary Poppendieck",
-    number: "39-23-6423122",
-  },
-];
-
 const express = require("express");
 const morgan = require("morgan");
 const cors = require("cors");
-
+const Person = require("./models/phoneBook");
 const app = express();
 
 //this middleware is used to parse data sent via request
@@ -35,14 +11,6 @@ app.use(express.json());
 app.use(express.static("dist"));
 const validDomain = "http://localhost:5173";
 app.use(cors(validDomain));
-
-// //our own middleware
-// const requestLogger = (request, response, next) => {
-//   console.log("Method", request.method);
-//   console.log("Path", request.path);
-//   console.log("Body", request.body);
-//   next();
-// };
 
 //app.use(requestLogger);
 
@@ -55,6 +23,7 @@ app.use(
   })
 );
 
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //log info
 app.get("/info", (req, res) => {
   const currentTime = new Date().toString();
@@ -62,50 +31,89 @@ app.get("/info", (req, res) => {
     <p>${currentTime}</p>`);
 });
 
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //get all phone numbers
-app.get("/api/persons", (req, res) => {
-  res.send(persons);
+app.get("/api/persons", async (req, res) => {
+  const people = await Person.find();
+  res.status(200).json(people);
 });
 
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //get a single contact
-app.get("/api/persons/:id", (req, res) => {
+app.get("/api/persons/:id", async (req, res) => {
   const id = req.params.id;
-  const person = persons.find((person) => person.id == id);
+  const person = await Person.findOne({ _id: id });
   if (person) {
     res.send(person);
   } else res.status(404).end();
 });
 
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //delete a single contact
-app.delete("/api/persons/:id", (req, res) => {
+app.delete("/api/persons/:id", async (req, res) => {
   const id = req.params.id;
-  let found = persons.find((person) => person.id == id);
-  if (found) {
-    persons = persons.filter((person) => person.id != id);
-    res.status(204).end();
-  } else res.status(404).end();
+  console.log(id);
+  try {
+    const result = await Person.deleteOne({ _id: id });
+    if (result.deletedCount === 0) {
+      return res.status(404).end(); // No document found to delete
+    }
+    res.status(204).end(); // Successfully deleted
+  } catch (error) {
+    res
+      .status(500)
+      .json({ error: "An error occurred while deleting the contact." });
+  }
 });
 
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //post request
-app.post("/api/persons", (req, res) => {
-  //there is a possibility that ids might overlap but we are not focusing on that
-  //right now
-  let id = Math.floor(Math.random() * 1000) + 1;
-  id = id.toString();
-  const body = { id, ...req.body };
-
+app.post("/api/persons", async (req, res) => {
+  const people = await Person.find();
   //we need to check if the name we are getting doesn't already exist in the data we have
-  if (body.name != "") {
-    const name = persons.find((name) => name.name == body.name);
+  if (req.body.name != "") {
+    const name = people.find((person) => person.name == req.body.name);
     if (name) {
       return res.status(409).json({ error: "name already exists" });
     } else {
-      persons.push(body);
-      res.status(201);
-      res.send(persons);
+      try {
+        const person = new Person(req.body);
+        await person.save();
+        const updatedPeople = await Person.find();
+        res.status(201).json(updatedPeople);
+      } catch (e) {
+        console.log(e.message);
+        res.status(500);
+      }
     }
   } else {
     res.status(404).json({ error: "please enter a valid name" });
+  }
+});
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//put request to update the number of an existing contact
+app.put("/api/persons/:id", async (req, res) => {
+  const { name, number } = req.body;
+
+  if (!number) {
+    return res.status(400).json({ error: "No number here" });
+  }
+  try {
+    const person = await Person.findOneAndUpdate(
+      { name: name },
+      { number: number }
+    );
+    if (person) {
+      const updatedPeople = await Person.find();
+      res.status(200).json(updatedPeople);
+    } else {
+      res.status(404).json({ error: "Person not found." });
+    }
+  } catch (error) {
+    res
+      .status(500)
+      .json({ error: "An error occurred while updating the contact." });
   }
 });
 const PORT = process.env.PORT || 3001;

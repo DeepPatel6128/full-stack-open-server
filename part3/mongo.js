@@ -22,7 +22,7 @@ if (process.argv[3]) {
   });
 
   person.save().then((res) => {
-    console.log(res);
+    console.log(`added ${res.name} ${res.number} to phonebook`);
     mongoose.connection.close();
   });
 } else {
