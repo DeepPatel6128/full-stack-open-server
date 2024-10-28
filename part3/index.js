@@ -9,8 +9,7 @@ const app = express();
 //we can use multiple middlewares at once but they will be executed orderly by which they are placed in the application
 app.use(express.json());
 app.use(express.static("dist"));
-const validDomain = "http://localhost:5173";
-app.use(cors(validDomain));
+app.use(cors());
 
 //app.use(requestLogger);
 
