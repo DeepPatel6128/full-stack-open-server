@@ -25,9 +25,10 @@ app.use(
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //log info
-app.get("/info", (req, res) => {
+app.get("/info", async (req, res) => {
   const currentTime = new Date().toString();
-  res.send(`<p>Phonebook has info for ${persons.length} people</p>
+  const people = await Person.find();
+  res.send(`<p>Phonebook has info for ${people.length} people</p>
     <p>${currentTime}</p>`);
 });
 
