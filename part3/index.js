@@ -14,14 +14,33 @@ app.use(cors(validDomain));
 
 //app.use(requestLogger);
 
-//log
+// Morgan token for request body
+morgan.token("body", (req) => {
+  return JSON.stringify(req.body);
+});
+
+// Custom Morgan format
 app.use(
-  morgan("combined", {
-    skip: function (req, res) {
-      return req.method != "POST";
-    },
-  })
+  morgan(
+    ":method :url :status :res[content-length] - :response-time ms :body",
+    {
+      skip: (req, res) =>
+        req.method !== "POST" || res.statusCode < 200 || res.statusCode >= 300, // Log only POST requests
+    }
+  )
 );
+
+///////////////////////////////////////
+//Error handling middleware
+function errorHandler(err, req, res, next) {
+  if (err.name == "CastError") {
+    res.status(400).json({ message: "ID not valid" });
+  } else if (err.name == "ValidationError") {
+    res.status(400).json({ message: err.message });
+  } else if (err.name == "ConflictError") {
+    res.status(409).json({ message: err.message });
+  }
+}
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //log info
@@ -35,25 +54,33 @@ app.get("/info", async (req, res) => {
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //get all phone numbers
 app.get("/api/persons", async (req, res) => {
-  const people = await Person.find();
-  res.status(200).json(people);
+  await Person.find()
+    .then((numbers) => {
+      res.status(200).json(numbers);
+    })
+    .catch((e) => {
+      res.status(404).json({ message: "Nothing found here" });
+    });
 });
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //get a single contact
-app.get("/api/persons/:id", async (req, res) => {
+app.get("/api/persons/:id", async (req, res, next) => {
   const id = req.params.id;
-  const person = await Person.findOne({ _id: id });
-  if (person) {
-    res.send(person);
-  } else res.status(404).end();
+  await Person.findOne({ _id: id })
+    .then((person) => {
+      if (person) res.send(person);
+      else res.status(404).end();
+    })
+    .catch((e) => {
+      next(e);
+    });
 });
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //delete a single contact
 app.delete("/api/persons/:id", async (req, res) => {
   const id = req.params.id;
-  console.log(id);
   try {
     const result = await Person.deleteOne({ _id: id });
     if (result.deletedCount === 0) {
@@ -69,53 +96,67 @@ app.delete("/api/persons/:id", async (req, res) => {
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //post request
-app.post("/api/persons", async (req, res) => {
+app.post("/api/persons", async (req, res, next) => {
   const people = await Person.find();
   //we need to check if the name we are getting doesn't already exist in the data we have
-  if (req.body.name != "") {
-    const name = people.find((person) => person.name == req.body.name);
-    if (name) {
-      return res.status(409).json({ error: "name already exists" });
-    } else {
-      try {
-        const person = new Person(req.body);
-        await person.save();
-        const updatedPeople = await Person.find();
-        res.status(201).json(updatedPeople);
-      } catch (e) {
-        console.log(e.message);
-        res.status(500);
+  const individual = people.find(
+    (person) => person.name == req.body.name || person.number == req.body.number
+  );
+  try {
+    //if person already exists in the database, we create a custom error and send it to frontend
+    if (individual) {
+      if (individual.name == req.body.name) {
+        const error = new Error("Name already exists.");
+        error.name = "ConflictError";
+        error.status = 400; // Set an appropriate status code
+        return next(error);
+      } else if (individual.number == req.body.number) {
+        res
+          .status(500)
+          .json({ message: "Number is already registered for some name" });
       }
     }
-  } else {
-    res.status(404).json({ error: "please enter a valid name" });
+    const person = new Person(req.body);
+    await person.save();
+    const updatedPeople = await Person.find();
+    res.status(201).json(updatedPeople);
+  } catch (e) {
+    next(e);
   }
 });
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //put request to update the number of an existing contact
-app.put("/api/persons/:id", async (req, res) => {
+app.put("/api/persons/:id", async (req, res, next) => {
   const { name, number } = req.body;
+  const existingContact = await Person.findOne({ number: number });
 
   if (!number) {
-    return res.status(400).json({ error: "No number here" });
+    return res.status(400).json({ message: "No number entered in the field" });
+  }
+
+  if (existingContact) {
+    return res
+      .status(400)
+      .json({ message: "Number already exists for some other contact" });
   }
   try {
     const person = await Person.findOneAndUpdate(
       { name: name },
-      { number: number }
+      { number: number },
+      { runValidators: true }
     );
     if (person) {
       const updatedPeople = await Person.find();
       res.status(200).json(updatedPeople);
     } else {
-      res.status(404).json({ error: "Person not found." });
+      res.status(404).json({ message: "Person not found." });
     }
   } catch (error) {
-    res
-      .status(500)
-      .json({ error: "An error occurred while updating the contact." });
+    next(error);
   }
 });
+
+app.use(errorHandler);
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => console.log("Listening"));
