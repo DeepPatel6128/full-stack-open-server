@@ -22,4 +22,4 @@ mongoose.connect(mongoURI).then(()=> console.log('Connected')).catch((e)=>consol
 //all routes goes here
 app.use('/api/blogs', blogRouter)
 app.use('/api/blogs', blogRouter)
-app.listen(3001, ()=>{console.log('Listening to port')})
+app.listen(config.PORT, ()=>{console.log('Listening to port')})
